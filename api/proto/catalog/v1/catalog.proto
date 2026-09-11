@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package avitokitchen.catalog.v1;
+
+option go_package = "github.com/talense-tasks/backend-trainee-assignment-autumn-2026-flow-2-brartemhse-079cad3c/gen/go/catalog/v1;catalogv1";
+
+service CatalogService {
+  rpc ListRestaurants(ListRestaurantsRequest) returns (ListRestaurantsResponse);
+  rpc GetRestaurantMenu(GetRestaurantMenuRequest) returns (GetRestaurantMenuResponse);
+  rpc ValidateOrderItems(ValidateOrderItemsRequest) returns (ValidateOrderItemsResponse);
+}
+
+message ListRestaurantsRequest {}
+
+message ListRestaurantsResponse {
+  repeated Restaurant restaurants = 1;
+}
+
+message GetRestaurantMenuRequest {
+  string restaurant_id = 1;
+}
+
+message GetRestaurantMenuResponse {
+  Menu menu = 1;
+}
+
+message ValidateOrderItemsRequest {
+  string restaurant_id = 1;
+  repeated RequestedItem items = 2;
+}
+
+message ValidateOrderItemsResponse {
+  repeated ValidatedItem items = 1;
+  int64 total_cents = 2;
+}
+
+message Restaurant {
+  string id = 1;
+  string name = 2;
+  string cuisine = 3;
+  bool is_open = 4;
+}
+
+message Menu {
+  string restaurant_id = 1;
+  repeated MenuCategory categories = 2;
+}
+
+message MenuCategory {
+  string id = 1;
+  string name = 2;
+  repeated MenuItem items = 3;
+}
+
+message MenuItem {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  int64 price_cents = 4;
+  bool available = 5;
+  repeated MenuModifier modifiers = 6;
+}
+
+message MenuModifier {
+  string id = 1;
+  string name = 2;
+  int64 price_delta_cents = 3;
+}
+
+message RequestedItem {
+  string menu_item_id = 1;
+  int32 quantity = 2;
+  repeated string modifier_item_ids = 3;
+}
+
+message ValidatedItem {
+  string menu_item_id = 1;
+  string name = 2;
+  int64 unit_price_cents = 3;
+  int32 quantity = 4;
+  repeated string modifier_item_ids = 5;
+  int64 line_total_cents = 6;
+}

@@ -1,0 +1,31 @@
+@startuml AvitoKitchenOrderComponent
+!include <C4/C4_Component>
+
+title Авито.Кухня - C4 Component для order-service
+
+Container_Boundary(order_service, "order-service") {
+  Component(grpc, "Order gRPC adapter", "Go/gRPC", "Проверяет transport DTO и маппит статусы")
+  Component(app, "Order application service", "Go", "Координирует создание и смену статуса")
+  Component(domain, "Order domain", "Go", "Инварианты, снимок цены и state machine")
+  Component(catalog_client, "Catalog gRPC client", "Go/gRPC", "Проверяет позиции в catalog-service")
+  Component(store, "Postgres order store", "database/sql", "Транзакции заказа, idempotency, inbox и outbox")
+  Component(relay, "Outbox relay", "Go", "Публикует сохранённые события at-least-once")
+  Component(consumer, "Partner event consumer", "kafka-go", "Валидирует событие до application layer")
+}
+
+Container_Ext(catalog, "catalog-service", "Go/gRPC", "Каталог и актуальные цены")
+Container_Ext(kafka, "Apache Kafka", "Kafka API", "orders.events.v1 и partner.events.v1")
+ContainerDb_Ext(db, "orders schema", "PostgreSQL", "orders, order_items, idempotency_keys, inbox_messages, outbox_messages")
+
+Rel(grpc, app, "CreateOrder, GetOrder")
+Rel(app, domain, "Создаёт и переводит агрегат")
+Rel(app, catalog_client, "ValidateOrderItems")
+Rel(catalog_client, catalog, "Проверяет меню", "gRPC")
+Rel(app, store, "Сохраняет транзакционно")
+Rel(store, db, "SQL")
+Rel(relay, store, "Claim/MarkPublished/MarkFailed")
+Rel(relay, kafka, "order.created.v1", "Kafka")
+Rel(kafka, consumer, "partner events", "Kafka")
+Rel(consumer, app, "ApplyPartnerEvent")
+
+@enduml

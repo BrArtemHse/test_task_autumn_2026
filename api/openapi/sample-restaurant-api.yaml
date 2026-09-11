@@ -1,0 +1,262 @@
+openapi: 3.0.3
+info:
+  title: API демонстрационного ресторана
+  version: 0.1.0
+  description: |
+    API отдельного сервиса заведения, запускаемого вместе с Авито.Кухней.
+    Платформа доставляет сюда заказ, а оператор принимает или отклоняет его.
+servers:
+  - url: http://localhost:8084
+paths:
+  /orders:
+    post:
+      operationId: receiveOrder
+      summary: Принять заказ от платформы
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Совпадает с order_id
+        - name: X-External-Store-ID
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-Submission-ID
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveredOrder"
+      responses:
+        "202":
+          description: Заказ впервые сохранён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderReceipt"
+        "200":
+          description: Идемпотентный повтор доставки
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderReceipt"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /orders/{orderId}:
+    get:
+      operationId: getDeliveredOrder
+      summary: Получить заказ в интерфейсе оператора
+      security:
+        - operatorBearer: []
+      parameters:
+        - $ref: "#/components/parameters/OrderID"
+      responses:
+        "200":
+          description: Заказ найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoredOrder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /orders/{orderId}/status:
+    post:
+      operationId: decideOrder
+      summary: Принять или отклонить заказ
+      security:
+        - operatorBearer: []
+      parameters:
+        - $ref: "#/components/parameters/OrderID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [accepted, rejected]
+      responses:
+        "202":
+          description: Решение сохранено, callback принят платформой
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionReceipt"
+        "200":
+          description: Идемпотентный повтор решения
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionReceipt"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "502":
+          description: Платформа временно не подтвердила callback; повтор с тем же решением безопасен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "503":
+          description: Отправитель callback не настроен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    operatorBearer:
+      type: http
+      scheme: bearer
+      description: Локальный демонстрационный токен оператора ресторана
+  parameters:
+    OrderID:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    InternalServerError:
+      description: Внутренняя ошибка сервиса
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Отсутствует или неверен токен оператора
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Заказ не найден
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Идентификатор повторён с другим содержимым либо решение конфликтует с первым
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    DeliveredOrder:
+      allOf:
+        - $ref: "#/components/schemas/RestaurantOrder"
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [pending_restaurant_confirmation]
+    RestaurantOrder:
+      type: object
+      required: [order_id, user_id, restaurant_id, status, total_cents, items]
+      properties:
+        order_id:
+          type: string
+        user_id:
+          type: string
+        restaurant_id:
+          type: string
+        status:
+          type: string
+          enum: [pending_restaurant_confirmation, accepted, rejected]
+        total_cents:
+          type: integer
+          format: int64
+          minimum: 0
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/DeliveredOrderItem"
+    DeliveredOrderItem:
+      type: object
+      required: [menu_item_id, name, unit_price_cents, quantity, modifier_item_ids, line_total_cents]
+      properties:
+        menu_item_id:
+          type: string
+        name:
+          type: string
+        unit_price_cents:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+        modifier_item_ids:
+          type: array
+          items:
+            type: string
+        line_total_cents:
+          type: integer
+          format: int64
+    StoredOrder:
+      type: object
+      required: [order, external_store_id, submission_id, callback_acknowledged]
+      properties:
+        order:
+          $ref: "#/components/schemas/RestaurantOrder"
+        external_store_id:
+          type: string
+        submission_id:
+          type: string
+        status_callback_id:
+          type: string
+        callback_acknowledged:
+          type: boolean
+    OrderReceipt:
+      type: object
+      required: [order_id, duplicate]
+      properties:
+        order_id:
+          type: string
+        duplicate:
+          type: boolean
+    DecisionReceipt:
+      type: object
+      required: [callback_id, duplicate]
+      properties:
+        callback_id:
+          type: string
+        duplicate:
+          type: boolean
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

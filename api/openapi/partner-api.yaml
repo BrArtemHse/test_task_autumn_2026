@@ -1,0 +1,118 @@
+openapi: 3.0.3
+info:
+  title: Партнёрский API Авито.Кухни
+  version: 0.1.0
+  description: |
+    HTTP API, через который зарегистрированное заведение сообщает решение по заказу.
+    В MVP поддерживаются только статусы accepted и rejected.
+servers:
+  - url: http://localhost:8083
+paths:
+  /callbacks/order-status:
+    post:
+      operationId: receiveOrderStatusCallback
+      summary: Принять решение заведения по заказу
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-Request-ID
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Идентификатор трассировки; рекомендуется передавать callback_id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderStatusCallback"
+      responses:
+        "202":
+          description: Callback впервые принят и сохранён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallbackReceipt"
+        "200":
+          description: Идемпотентный повтор ранее принятого callback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallbackReceipt"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: callback_id повторно использован с другим содержимым либо решение конфликтует с сохранённым
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Секрет активной интеграции заведения
+  responses:
+    BadRequest:
+      description: Некорректный callback
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Отсутствует или неверен секрет интеграции
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Внутренняя ошибка обработки callback
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    OrderStatusCallback:
+      type: object
+      required:
+        - callback_id
+        - order_id
+        - restaurant_id
+        - external_store_id
+        - status
+        - occurred_at
+      properties:
+        callback_id:
+          type: string
+        order_id:
+          type: string
+        restaurant_id:
+          type: string
+        external_store_id:
+          type: string
+        status:
+          type: string
+          enum: [accepted, rejected]
+        occurred_at:
+          type: string
+          format: date-time
+    CallbackReceipt:
+      type: object
+      required: [callback_id, duplicate]
+      properties:
+        callback_id:
+          type: string
+        duplicate:
+          type: boolean
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package avitokitchen.partner.v1;
+
+option go_package = "github.com/talense-tasks/backend-trainee-assignment-autumn-2026-flow-2-brartemhse-079cad3c/gen/go/partner/v1;partnerv1";
+
+service PartnerService {
+  rpc GetIntegration(GetIntegrationRequest) returns (GetIntegrationResponse);
+  rpc RegisterIntegration(RegisterIntegrationRequest) returns (RegisterIntegrationResponse);
+}
+
+message GetIntegrationRequest {
+  string restaurant_id = 1;
+}
+
+message GetIntegrationResponse {
+  RestaurantIntegration integration = 1;
+}
+
+message RegisterIntegrationRequest {
+  string restaurant_id = 1;
+  string external_store_id = 2;
+  string callback_url = 3;
+  string shared_secret = 4;
+}
+
+message RegisterIntegrationResponse {
+  RestaurantIntegration integration = 1;
+}
+
+message RestaurantIntegration {
+  string id = 1;
+  string restaurant_id = 2;
+  string external_store_id = 3;
+  string callback_url = 4;
+  IntegrationStatus status = 5;
+}
+
+enum IntegrationStatus {
+  INTEGRATION_STATUS_UNSPECIFIED = 0;
+  INTEGRATION_STATUS_ACTIVE = 1;
+  INTEGRATION_STATUS_DISABLED = 2;
+}

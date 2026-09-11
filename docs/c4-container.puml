@@ -1,0 +1,35 @@
+@startuml AvitoKitchenC4Container
+!include <C4/C4_Container>
+
+title Авито.Кухня - C4 Container
+
+Person(user, "Пользователь", "Выбирает меню и создаёт заказ")
+Person(operator, "Оператор заведения", "Принимает или отклоняет заказ")
+
+System_Boundary(kitchen, "Авито.Кухня") {
+  Container(api, "kitchen-api", "Go, HTTP/JSON", "BFF для web-клиента")
+  Container(catalog, "catalog-service", "Go, gRPC", "Заведения, меню и доступность")
+  Container(orders, "order-service", "Go, gRPC", "Заказы, идемпотентность и статусы")
+  Container(partner, "partner-service", "Go, HTTP + Kafka", "Интеграции, доставка заказов и callback")
+  ContainerQueue(kafka, "Apache Kafka", "Kafka API", "События заказов и решений заведений")
+  ContainerDb(db, "PostgreSQL", "PostgreSQL 16", "Изолированные схемы catalog, orders и partner")
+}
+
+System_Ext(restaurant, "sample-restaurant-service", "Отдельный пример заведения из того же Compose")
+
+Rel(user, api, "Работает с каталогом и заказами", "HTTP/JSON")
+Rel(api, catalog, "Читает заведения и меню", "gRPC")
+Rel(api, orders, "Создаёт и читает заказы", "gRPC")
+Rel(orders, catalog, "Проверяет позиции и фиксирует цены", "gRPC")
+Rel(catalog, db, "Читает каталог", "SQL")
+Rel(orders, db, "Хранит заказы, inbox и outbox", "SQL")
+Rel(partner, db, "Хранит интеграции, доставки, callback, inbox и outbox", "SQL")
+Rel(orders, kafka, "Публикует order.created.v1 через outbox", "Kafka")
+Rel(kafka, partner, "Доставляет события заказов", "Kafka")
+Rel(partner, restaurant, "Доставляет снимок заказа", "HTTP/JSON")
+Rel(operator, restaurant, "Просматривает и решает заказ", "HTTP/JSON + Bearer")
+Rel(restaurant, partner, "Сообщает accepted/rejected", "HTTP callback + Bearer")
+Rel(partner, kafka, "Публикует partner events через outbox", "Kafka")
+Rel(kafka, orders, "Доставляет решение заведения", "Kafka")
+
+@enduml

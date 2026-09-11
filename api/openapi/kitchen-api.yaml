@@ -1,0 +1,308 @@
+openapi: 3.0.3
+info:
+  title: API Авито.Кухни
+  version: 0.1.0
+  description: |
+    Внешний HTTP API для web-клиента Авито.Кухни.
+    Заголовок X-User-ID имитирует идентификатор пользователя в MVP и не является аутентификацией.
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/restaurants:
+    get:
+      operationId: listRestaurants
+      summary: Получить доступные заведения
+      responses:
+        "200":
+          description: Restaurants returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [restaurants]
+                properties:
+                  restaurants:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Restaurant"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/restaurants/{restaurantId}/menu:
+    get:
+      operationId: getRestaurantMenu
+      summary: Получить меню заведения с признаком доступности блюд
+      parameters:
+        - $ref: "#/components/parameters/RestaurantID"
+      responses:
+        "200":
+          description: Menu returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Menu"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/orders:
+    post:
+      operationId: createOrder
+      summary: Создать заказ
+      description: |
+        Новый заказ проверяется по текущему каталогу; закрытый ресторан или
+        недоступная позиция приводят к HTTP 400. Повтор с тем же пользователем,
+        ключом и содержимым возвращает сохранённый заказ с актуальным статусом
+        и исходным снимком цен без обращения к каталогу. Повтор с другим
+        содержимым возвращает HTTP 409.
+      parameters:
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "200":
+          description: Existing order returned for duplicate idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Idempotency key was reused with a different payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Получить заказ, его статус и снимок цен
+      parameters:
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/OrderID"
+      responses:
+        "200":
+          description: Order returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+components:
+  parameters:
+    RestaurantID:
+      name: restaurantId
+      in: path
+      required: true
+      schema:
+        type: string
+    OrderID:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    InternalServerError:
+      description: Внутренняя ошибка сервиса или недоступность зависимости
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Restaurant:
+      type: object
+      required: [id, name, cuisine, isOpen]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        cuisine:
+          type: string
+        isOpen:
+          type: boolean
+    Menu:
+      type: object
+      required: [restaurantId, categories]
+      properties:
+        restaurantId:
+          type: string
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/MenuCategory"
+    MenuCategory:
+      type: object
+      required: [id, name, items]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MenuItem"
+    MenuItem:
+      type: object
+      required: [id, name, priceCents, available]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        priceCents:
+          type: integer
+          format: int64
+          minimum: 1
+        available:
+          type: boolean
+        modifiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/MenuModifier"
+    MenuModifier:
+      type: object
+      required: [id, name, priceDeltaCents]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        priceDeltaCents:
+          type: integer
+          format: int64
+    CreateOrderRequest:
+      type: object
+      additionalProperties: false
+      required: [restaurantId, items]
+      properties:
+        restaurantId:
+          type: string
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/CreateOrderItem"
+    CreateOrderItem:
+      type: object
+      additionalProperties: false
+      required: [menuItemId, quantity]
+      properties:
+        menuItemId:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+        modifierItemIds:
+          type: array
+          items:
+            type: string
+    Order:
+      type: object
+      required: [id, userId, restaurantId, status, totalCents, items, version]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        restaurantId:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending_restaurant_confirmation
+            - accepted
+            - rejected
+            - preparing
+            - ready
+            - completed
+            - cancelled
+        totalCents:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        version:
+          type: integer
+          minimum: 1
+          description: Версия агрегата заказа, увеличивается при изменении статуса
+    OrderItem:
+      type: object
+      required: [menuItemId, name, unitPriceCents, quantity, lineTotalCents]
+      properties:
+        menuItemId:
+          type: string
+        name:
+          type: string
+        unitPriceCents:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          format: int32
+        modifierItemIds:
+          type: array
+          items:
+            type: string
+        lineTotalCents:
+          type: integer
+          format: int64
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string

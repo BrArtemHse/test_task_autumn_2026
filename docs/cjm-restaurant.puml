@@ -1,0 +1,28 @@
+@startuml AvitoKitchenRestaurantCJM
+title Авито.Кухня - CJM заведения
+
+start
+:Интеграция и демонстрационное меню зарегистрированы;
+:partner-service получает order.created.v1;
+:partner-service сохраняет inbox и отложенную доставку;
+:Dispatcher отправляет снимок заказа в API заведения;
+if (Повторная доставка?) then (да)
+  :Вернуть сохранённый заказ по Idempotency-Key;
+else (нет)
+  :Сохранить новый заказ;
+endif
+:Оператор открывает заказ с Bearer-токеном;
+if (Заведение может выполнить заказ?) then (да)
+  :Сохранить решение accepted и callback_id;
+else (нет)
+  :Сохранить решение rejected и callback_id;
+endif
+:Отправить аутентифицированный callback;
+if (Результат HTTP неясен?) then (да)
+  :Повторить callback с тем же callback_id;
+endif
+:partner-service атомарно сохраняет callback и outbox;
+:order-service дедуплицирует событие и меняет статус;
+stop
+
+@enduml

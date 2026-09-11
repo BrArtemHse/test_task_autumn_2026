@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package avitokitchen.order.v1;
+
+option go_package = "github.com/talense-tasks/backend-trainee-assignment-autumn-2026-flow-2-brartemhse-079cad3c/gen/go/order/v1;orderv1";
+
+service OrderService {
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+}
+
+message CreateOrderRequest {
+  string request_id = 1;
+  string user_id = 2;
+  string idempotency_key = 3;
+  string restaurant_id = 4;
+  repeated CreateOrderItem items = 5;
+}
+
+message CreateOrderResponse {
+  Order order = 1;
+  bool reused_idempotency_key = 2;
+}
+
+message GetOrderRequest {
+  string order_id = 1;
+  string user_id = 2;
+}
+
+message GetOrderResponse {
+  Order order = 1;
+}
+
+message CreateOrderItem {
+  string menu_item_id = 1;
+  int32 quantity = 2;
+  repeated string modifier_item_ids = 3;
+}
+
+message Order {
+  string id = 1;
+  string user_id = 2;
+  string restaurant_id = 3;
+  OrderStatus status = 4;
+  repeated OrderItem items = 5;
+  int64 total_cents = 6;
+  int64 version = 7;
+}
+
+message OrderItem {
+  string menu_item_id = 1;
+  string name = 2;
+  int64 unit_price_cents = 3;
+  int32 quantity = 4;
+  repeated string modifier_item_ids = 5;
+  int64 line_total_cents = 6;
+}
+
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  ORDER_STATUS_PENDING_RESTAURANT_CONFIRMATION = 1;
+  ORDER_STATUS_ACCEPTED = 2;
+  ORDER_STATUS_REJECTED = 3;
+  ORDER_STATUS_PREPARING = 4;
+  ORDER_STATUS_READY = 5;
+  ORDER_STATUS_COMPLETED = 6;
+  ORDER_STATUS_CANCELLED = 7;
+}
